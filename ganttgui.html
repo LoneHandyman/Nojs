@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Título de la página</title>
+</head>
+<body>
+    <div style="width: 1024px; height: 784px; background-color: cadetblue;">
+        <h1>Gantt in JS</h1>
+        <div id="GanttDiv"></div>
+    </div>
+
+    <script>
+
+        function lightenDarkenColor(col, amt) {
+            var usePound = false;
+
+            if (col[0] === '#') {
+                col = col.slice(1);
+                usePound = true;
+            }
+
+            var num = parseInt(col, 16);
+
+            var r = ((num >> 16) & 0xFF) + amt;
+            if (r > 255) r = 255;
+            else if (r < 0) r = 0;
+
+            var g = ((num >> 8) & 0xFF) + amt;
+            if (g > 255) g = 255;
+            else if (g < 0) g = 0;
+
+            var b = (num & 0xFF) + amt;
+            if (b > 255) b = 255;
+            else if (b < 0) b = 0;
+
+            var newColor = (r << 16) | (g << 8) | b;
+
+            return (usePound ? "#" : "") + newColor.toString(16).padStart(6, '0');
+        }
+
+
+        class DivColumn{
+            constructor(options){
+                this.base = document.createElement("div");
+                this.baseSetup();
+                this.cells = [];
+                this.setBlankCells(options.nCells, options.cellWidth, 
+                                   options.cellHeight, options.bgColor);
+                this.setStyleBorder(options.radius, options.position);
+            }
+
+            baseSetup(){
+                this.base.style.display = "flex";
+                this.base.style.flexDirection = "column";
+                this.base.style.alignItems = "center";
+                this.base.style.justifyContent = "flex-center";
+            }
+
+            setCellValue(idx, value){
+                this.cells[idx % this.cells.length].innerText = value; 
+            }
+
+            setBlankCells(nCells, cellWidth, cellHeight, bgColor){
+                for(let i=0; i<nCells; ++i){
+                    const cell = document.createElement("div");
+                    cell.style.width = cellWidth;
+                    cell.style.height = cellHeight;
+                    if (i==0){
+                        cell.style.backgroundColor = lightenDarkenColor(bgColor, -20);
+                        cell.style.fontWeight = "bold";
+                    }else{
+                        cell.style.backgroundColor = bgColor;
+                    }
+                    cell.style.display = "flex";
+                    cell.style.justifyContent = "center";
+                    cell.style.alignItems = "center";
+                    cell.style.border = "1px solid lightgray";
+
+                    this.base.appendChild(cell);
+                    this.cells.push(cell);
+                }
+            }
+
+            setStyleBorder(radius, position){
+                let n = this.cells.length;
+                if (n > 0){
+                    if (position == "left"){
+                        this.cells[0].style.borderTopLeftRadius = radius;
+                        this.cells[n-1].style.borderBottomLeftRadius = radius;
+                    }else if (position == "right"){
+                        this.cells[0].style.borderTopRightRadius = radius;
+                        this.cells[n-1].style.borderBottomRightRadius = radius;
+                    }
+                }
+            }
+
+            attachTo(htmlElement){
+                htmlElement.appendChild(this.base);
+            }
+        }
+
+        class GanttLW{
+            constructor(id, options){
+                this.base = document.getElementById(id);
+                this.options = options;
+                this.timepointWidth = options.timepointWidthPx;//px
+                this.timeUnit = this.loadTimeUnit(options.timeUnit);
+
+                this.ganttIndex = document.createElement("div");
+                this.ganttBody= document.createElement("div");
+                this.ganttViewport = document.createElement("div");
+
+                this.tasks = [];
+                this.init();
+            }
+
+            init(){
+                this.setStyle();
+                this.consolidate();
+            }
+
+            setStyle(){
+                this.base.style.width = this.options.baseWidth;
+                this.base.style.height = this.options.baseHeight;
+                
+                this.ganttIndex.style.fontFamily = "Calibri, Arial, sans-serif";
+
+                this.ganttBody.style.width = this.options.ganttBodyWidth;
+
+                this.ganttViewport.style.overflowX = "auto";
+                this.ganttViewport.style.width = "100%";
+            }
+
+            consolidate(){
+                this.base.appendChild(this.ganttIndex);
+                this.ganttBody.appendChild(this.ganttViewport);
+                this.base.appendChild(this.ganttBody);
+            }
+            
+            //min(60x1), hour(24x1), day(7x1), week(4x1), month(12x1)
+            loadTimeUnit(TUID){
+                if (TUID == "min"){
+                    this.timeUnit = this.timepointWidth / 60;
+                }else if (TUID == "hour"){
+                    this.timeUnit = this.timepointWidth / 24;
+                }else if (TUID == "day"){
+                    this.timeUnit = this.timepointWidth / 7;
+                }else if (TUID == "week"){
+                    this.timeUnit = this.timepointWidth / 4;
+                }else if (TUID == "month"){
+                    this.timeUnit = this.timepointWidth / 12;
+                }
+            }
+
+            clearTasks(){
+                this.tasks.splice(0, this.tasks.length);
+            }
+
+            addTask(task){
+                this.tasks.push({
+                    ...task,
+                    start: new Date(task.start),
+                    end: new Date(task.end)
+                });
+            }
+
+            render(){
+                let nTasks = this.tasks.length;
+
+                const taskListing = new DivColumn({
+                    nCells: nTasks + 1,
+                    cellWidth: this.options.ganttIndexWidth || "100px", 
+                    cellHeight: this.options.ganttIndexHeight || "45px",
+                    radius: this.options.borderRadius || "12px",
+                    position: "left",
+                    bgColor: this.options.ganttIndexBgColor || "#ffeecc"
+                });
+
+                taskListing.setCellValue(0, "Tareas");
+
+                for (let i=1; i<=nTasks; ++i){
+                    taskListing.setCellValue(i, this.tasks[i-1].name);
+                }
+
+                taskListing.attachTo(this.ganttIndex);
+            }
+        }
+
+        const infTable = new GanttLW("GanttDiv", {
+            baseWidth: "90%",
+            baseHeight: "50%",
+            ganttIndexWidth: "20%",
+            ganttBodyWidth: "80%", 
+            timeUnit: "hour",
+            timepointWidthPx: 60,
+            observedViewportFactor: 0.8
+        });
+
+        infTable.addTask({name:"Homework", author:"God", start:"2025:03:01:00:10:02", end:"2025:03:04:01:00:15", color:"#ffddee"});
+        infTable.addTask({name:"Meeting", author:"Yisus", start:"2025:03:02:00:10:02", end:"2025:03:03:13:00:00", color:"#eeffdd"});
+        infTable.addTask({name:"Meditation", author:"Buda", start:"2025:02:28:01:03:00", end:"2025:03:01:03:00:20", color:"#ddeeff"});
+        infTable.addTask({name:"Hunting", author:"Ala", start:"2025:03:05:01:22:02", end:"2025:03:14:00:04:15", color:"#aaffec"});
+
+        infTable.render();
+
+    </script>
+</body>
+</html>
